@@ -1,0 +1,15 @@
+# Compiled Java files
+*.class
+
+# External libraries
+lib/
+
+# Provided GPS files
+Example.java
+GpsEvent.java
+GpsService.java
+gps.dat
+
+# System and VS Code files
+.DS_Store
+.vscode/
