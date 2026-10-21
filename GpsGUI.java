@@ -59,40 +59,43 @@ public class GpsGUI extends JFrame {
         GpsService service = new GpsService();
         Stream<GpsEvent>[] streams = service.getEventStreams();
 
-        // Transform Tracker0's GPS events to remove altitude
-        Stream<String> simplifiedStream = streams[0].map(event ->
-            event.name + "," + event.latitude + "," + event.longitude
-        );
+        // Connect each GPS stream to its corresponding tracker panel
+        for (int i = 0; i < 10; i++) {
 
-        // Find Tracker0's panel and its labels
-        JPanel tracker0Panel = (JPanel) trackerPanel.getComponent(0);
+            // Remove altitude from the event using Sodium FRP
+            Stream<String> simplifiedStream = streams[i].map(event ->
+                event.name + "," + event.latitude + "," + event.longitude
+            );
 
-        JLabel latitude0 = (JLabel) tracker0Panel.getComponent(1);
-        JLabel longitude0 = (JLabel) tracker0Panel.getComponent(2);
-        JLabel event0 = (JLabel) tracker0Panel.getComponent(3);
+            // Find the GUI panel corresponding to this tracker
+            JPanel individualTracker = (JPanel) trackerPanel.getComponent(i);
 
-        // Clear the latest-event field after 3 seconds
-        Timer clearTimer = new Timer(3000, e ->
-            event0.setText("Latest Event: --")
-        );
-        clearTimer.setRepeats(false);
+            JLabel latitudeLabel = (JLabel) individualTracker.getComponent(1);
+            JLabel longitudeLabel = (JLabel) individualTracker.getComponent(2);
+            JLabel eventLabel = (JLabel) individualTracker.getComponent(3);
 
-        // Listen for simplified GPS events
-        simplifiedStream.listen(data -> {
-            SwingUtilities.invokeLater(() -> {
+            // Each tracker needs its own independent clearing timer
+            Timer clearTimer = new Timer(3000, e ->
+                eventLabel.setText("Latest Event: --")
+            );
+            clearTimer.setRepeats(false);
 
-                // Separate the event into its individual fields
-                String[] fields = data.split(",");
+            // Listen for incoming GPS events
+            simplifiedStream.listen(data -> {
+                SwingUtilities.invokeLater(() -> {
 
-                latitude0.setText("Latitude: " + fields[1]);
-                longitude0.setText("Longitude: " + fields[2]);
+                    // Extract the coordinates from the simplified event
+                    String[] fields = data.split(",");
 
-                event0.setText("Latest Event: " + data);
+                    latitudeLabel.setText("Latitude: " + fields[1]);
+                    longitudeLabel.setText("Longitude: " + fields[2]);
+                    eventLabel.setText("Latest Event: " + data);
 
-                // Restart the timer whenever a new event arrives
-                clearTimer.restart();
+                    // Reset this tracker's timer when a new event arrives
+                    clearTimer.restart();
+                });
             });
-        });
+        }
     }
 
     public static void main(String[] args) {
