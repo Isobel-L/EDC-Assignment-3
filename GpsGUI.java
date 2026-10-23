@@ -96,6 +96,55 @@ public class GpsGUI extends JFrame {
                 });
             });
         }
+
+        // Combine all GPS event streams into one Sodium stream
+        Stream<GpsEvent> combinedStream = streams[0];
+
+        for (int i = 1; i < streams.length; i++) {
+            combinedStream = combinedStream.orElse(streams[i]);
+        }
+
+        // Create a display for the combined GPS events
+        JPanel combinedPanel = new JPanel(new BorderLayout());
+
+        JLabel combinedHeading = new JLabel(
+            "Combined GPS Events",
+            JLabel.CENTER
+        );
+
+        JLabel combinedEventLabel = new JLabel(
+            "Latest Event: --",
+            JLabel.CENTER
+        );
+
+        combinedPanel.add(combinedHeading, BorderLayout.NORTH);
+        combinedPanel.add(combinedEventLabel, BorderLayout.CENTER);
+
+        combinedPanel.setBorder(
+            javax.swing.BorderFactory.createEtchedBorder()
+        );
+
+        add(combinedPanel, BorderLayout.SOUTH);
+
+        // Clear combined event after 3 seconds
+        Timer combinedTimer = new Timer(3000, e ->
+            combinedEventLabel.setText("Latest Event: --")
+        );
+        combinedTimer.setRepeats(false);
+
+        // Display events from the combined stream
+        combinedStream.listen(event -> {
+            SwingUtilities.invokeLater(() -> {
+                combinedEventLabel.setText(
+                    "Latest Event: " + event.name + ","
+                    + event.latitude + ","
+                    + event.longitude + ","
+                    + event.altitude
+                );
+
+                combinedTimer.restart();
+            });
+        });
     }
 
     public static void main(String[] args) {
