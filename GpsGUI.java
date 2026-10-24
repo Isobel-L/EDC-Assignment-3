@@ -3,6 +3,9 @@ import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import javax.swing.JTextField;
+import javax.swing.JButton;
+import javax.swing.JOptionPane;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
 import nz.sodium.Stream;
@@ -104,6 +107,90 @@ public class GpsGUI extends JFrame {
             combinedStream = combinedStream.orElse(streams[i]);
         }
 
+        // Create latitude and longitude restriction controls
+        JPanel restrictionPanel = new JPanel(new GridLayout(2, 3, 10, 5));
+
+        JTextField latitudeInput = new JTextField("40.0");
+        JTextField longitudeInput = new JTextField("116.0");
+
+        JButton setRestrictionButton = new JButton("Set Restriction");
+
+        JLabel latitudeRestrictionLabel = new JLabel(
+            "Latitude restriction: Not set"
+        );
+        JLabel longitudeRestrictionLabel = new JLabel(
+            "Longitude restriction: Not set"
+        );
+
+        restrictionPanel.add(new JLabel("Latitude (+/- degrees):"));
+        restrictionPanel.add(latitudeInput);
+        restrictionPanel.add(latitudeRestrictionLabel);
+
+        restrictionPanel.add(new JLabel("Longitude (+/- degrees):"));
+        restrictionPanel.add(longitudeInput);
+        restrictionPanel.add(longitudeRestrictionLabel);
+
+        // Keep the restriction button in its own panel
+        JPanel restrictionControls = new JPanel(new BorderLayout());
+        restrictionControls.add(restrictionPanel, BorderLayout.CENTER);
+        restrictionControls.add(
+            setRestrictionButton,
+            BorderLayout.SOUTH
+        );
+
+        restrictionControls.setBorder(
+            javax.swing.BorderFactory.createTitledBorder(
+                "GPS Coordinate Restrictions"
+            )
+        );
+
+        // Store selected restriction values for future FRP filtering
+        final double[] activeRestrictions = {90.0, 180.0};
+
+        setRestrictionButton.addActionListener(e -> {
+            try {
+                double latitude = Double.parseDouble(
+                    latitudeInput.getText().trim()
+                );
+                double longitude = Double.parseDouble(
+                    longitudeInput.getText().trim()
+                );
+
+                if (!Double.isFinite(latitude)
+                        || !Double.isFinite(longitude)
+                        || latitude < 0 || latitude > 90
+                        || longitude < 0 || longitude > 180) {
+
+                    JOptionPane.showMessageDialog(
+                        this,
+                        "Enter a latitude restriction between 0 and 90 "
+                        + "and a longitude restriction between 0 and 180.",
+                        "Invalid Restriction",
+                        JOptionPane.ERROR_MESSAGE
+                    );
+                    return;
+                }
+
+                activeRestrictions[0] = latitude;
+                activeRestrictions[1] = longitude;
+
+                latitudeRestrictionLabel.setText(
+                    "Latitude restriction: +/- " + latitude
+                );
+                longitudeRestrictionLabel.setText(
+                    "Longitude restriction: +/- " + longitude
+                );
+
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(
+                    this,
+                    "Please enter valid numerical coordinates.",
+                    "Invalid Input",
+                    JOptionPane.ERROR_MESSAGE
+                );
+            }
+        });
+
         // Create a display for the combined GPS events
         JPanel combinedPanel = new JPanel(new BorderLayout());
 
@@ -124,7 +211,12 @@ public class GpsGUI extends JFrame {
             javax.swing.BorderFactory.createEtchedBorder()
         );
 
-        add(combinedPanel, BorderLayout.SOUTH);
+        // Group the restrictions and combined display
+        JPanel bottomPanel = new JPanel(new BorderLayout());
+        bottomPanel.add(restrictionControls, BorderLayout.NORTH);
+        bottomPanel.add(combinedPanel, BorderLayout.CENTER);
+
+        add(bottomPanel, BorderLayout.SOUTH);
 
         // Clear combined event after 3 seconds
         Timer combinedTimer = new Timer(3000, e ->
