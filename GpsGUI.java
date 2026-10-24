@@ -9,8 +9,25 @@ import javax.swing.JOptionPane;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
 import nz.sodium.Stream;
+import nz.sodium.CellSink;
 
 public class GpsGUI extends JFrame {
+
+    // Immutable restriction values used by Sodium FRP
+    private static class GpsRestrictions {
+        final double latitude;
+        final double longitude;
+
+        GpsRestrictions(double latitude, double longitude) {
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
+
+        boolean contains(GpsEvent event) {
+            return Math.abs(event.latitude) <= latitude
+                && Math.abs(event.longitude) <= longitude;
+        }
+    }
 
     public GpsGUI() {
         // Set up the main application window
@@ -144,9 +161,12 @@ public class GpsGUI extends JFrame {
             )
         );
 
-        // Store selected restriction values for future FRP filtering
-        final double[] activeRestrictions = {90.0, 180.0};
+        // Store current restrictions in a Sodium reactive cell
+        // Initially allow the full valid coordinate range
+        CellSink<GpsRestrictions> activeRestrictions =
+            new CellSink<>(new GpsRestrictions(90.0, 180.0));
 
+        // Update the restriction cell when the button is clicked
         setRestrictionButton.addActionListener(e -> {
             try {
                 double latitude = Double.parseDouble(
@@ -171,8 +191,10 @@ public class GpsGUI extends JFrame {
                     return;
                 }
 
-                activeRestrictions[0] = latitude;
-                activeRestrictions[1] = longitude;
+                // Send the new restriction values into Sodium
+                activeRestrictions.send(
+                    new GpsRestrictions(latitude, longitude)
+                );
 
                 latitudeRestrictionLabel.setText(
                     "Latitude restriction: +/- " + latitude
@@ -190,6 +212,19 @@ public class GpsGUI extends JFrame {
                 );
             }
         });
+
+        // Use snapshot to check each GPS event against
+        // the active restrictions at the time of the event
+        Stream<GpsEvent> checkedStream = combinedStream.snapshot(
+            activeRestrictions,
+            (event, restrictions) ->
+                restrictions.contains(event) ? event : null
+        );
+
+        // Remove GPS events that failed the restriction check
+        Stream<GpsEvent> filteredStream = checkedStream.filter(
+            event -> event != null
+        );
 
         // Create a display for the combined GPS events
         JPanel combinedPanel = new JPanel(new BorderLayout());
@@ -224,8 +259,8 @@ public class GpsGUI extends JFrame {
         );
         combinedTimer.setRepeats(false);
 
-        // Display events from the combined stream
-        combinedStream.listen(event -> {
+        // Display only events that pass the Sodium filter
+        filteredStream.listen(event -> {
             SwingUtilities.invokeLater(() -> {
                 combinedEventLabel.setText(
                     "Latest Event: " + event.name + ","
