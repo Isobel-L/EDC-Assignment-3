@@ -29,6 +29,42 @@ public class GpsGUI extends JFrame {
         }
     }
 
+    // Validate a coordinate restriction before updating Sodium
+    private static double parseRestriction(
+            String input, String coordinate, double maximum) {
+
+        if (input == null || input.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                coordinate + " restriction cannot be empty."
+            );
+        }
+
+        double value;
+
+        try {
+            value = Double.parseDouble(input.trim());
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException(
+                coordinate + " restriction must be a valid number."
+            );
+        }
+
+        if (!Double.isFinite(value)) {
+            throw new IllegalArgumentException(
+                coordinate + " restriction must be a finite number."
+            );
+        }
+
+        if (value < 0 || value > maximum) {
+            throw new IllegalArgumentException(
+                coordinate + " restriction must be between 0 and "
+                + maximum + "."
+            );
+        }
+
+        return value == 0 ? 0.0 : value;
+    }
+
     public GpsGUI() {
         // Set up the main application window
         setTitle("GPS Tracking System");
@@ -132,11 +168,12 @@ public class GpsGUI extends JFrame {
 
         JButton setRestrictionButton = new JButton("Set Restriction");
 
+        // Show the actual initial restrictions
         JLabel latitudeRestrictionLabel = new JLabel(
-            "Latitude restriction: Not set"
+            "Latitude restriction: +/- 90.0"
         );
         JLabel longitudeRestrictionLabel = new JLabel(
-            "Longitude restriction: Not set"
+            "Longitude restriction: +/- 180.0"
         );
 
         restrictionPanel.add(new JLabel("Latitude (+/- degrees):"));
@@ -166,32 +203,18 @@ public class GpsGUI extends JFrame {
         CellSink<GpsRestrictions> activeRestrictions =
             new CellSink<>(new GpsRestrictions(90.0, 180.0));
 
-        // Update the restriction cell when the button is clicked
+        // Update restrictions only after both inputs are valid
         setRestrictionButton.addActionListener(e -> {
             try {
-                double latitude = Double.parseDouble(
-                    latitudeInput.getText().trim()
-                );
-                double longitude = Double.parseDouble(
-                    longitudeInput.getText().trim()
+                double latitude = parseRestriction(
+                    latitudeInput.getText(), "Latitude", 90.0
                 );
 
-                if (!Double.isFinite(latitude)
-                        || !Double.isFinite(longitude)
-                        || latitude < 0 || latitude > 90
-                        || longitude < 0 || longitude > 180) {
+                double longitude = parseRestriction(
+                    longitudeInput.getText(), "Longitude", 180.0
+                );
 
-                    JOptionPane.showMessageDialog(
-                        this,
-                        "Enter a latitude restriction between 0 and 90 "
-                        + "and a longitude restriction between 0 and 180.",
-                        "Invalid Restriction",
-                        JOptionPane.ERROR_MESSAGE
-                    );
-                    return;
-                }
-
-                // Send the new restriction values into Sodium
+                // Send both validated values to Sodium together
                 activeRestrictions.send(
                     new GpsRestrictions(latitude, longitude)
                 );
@@ -203,25 +226,24 @@ public class GpsGUI extends JFrame {
                     "Longitude restriction: +/- " + longitude
                 );
 
-            } catch (NumberFormatException ex) {
+            } catch (IllegalArgumentException ex) {
                 JOptionPane.showMessageDialog(
                     this,
-                    "Please enter valid numerical coordinates.",
-                    "Invalid Input",
+                    ex.getMessage(),
+                    "Invalid Restriction",
                     JOptionPane.ERROR_MESSAGE
                 );
             }
         });
 
-        // Use snapshot to check each GPS event against
-        // the active restrictions at the time of the event
+        // Check each event against the currently active restrictions
         Stream<GpsEvent> checkedStream = combinedStream.snapshot(
             activeRestrictions,
             (event, restrictions) ->
                 restrictions.contains(event) ? event : null
         );
 
-        // Remove GPS events that failed the restriction check
+        // Remove events that do not satisfy the restrictions
         Stream<GpsEvent> filteredStream = checkedStream.filter(
             event -> event != null
         );
