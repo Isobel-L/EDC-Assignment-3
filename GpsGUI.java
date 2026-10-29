@@ -26,21 +26,6 @@ public class GpsGUI extends JFrame {
     // Store the distance display labels
     private final JLabel[] distanceLabels = new JLabel[10];
 
-    // Immutable restriction values used by Sodium FRP
-    private static class GpsRestrictions {
-        final double latitude;
-        final double longitude;
-
-        GpsRestrictions(double latitude, double longitude) {
-            this.latitude = latitude;
-            this.longitude = longitude;
-        }
-
-        boolean contains(GpsEvent event) {
-            return Math.abs(event.latitude) <= latitude
-                && Math.abs(event.longitude) <= longitude;
-        }
-    }
 
     // Validate a coordinate restriction before updating Sodium
     private static double parseRestriction(
