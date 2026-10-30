@@ -77,24 +77,28 @@ public class GpsDistanceWindow_Test {
         assertEquals(0.0, window.getDistance(60000), 0.0001);
     }
 
-    @Test
-    public void testExactFiveMinuteBoundary() {
-        GpsDistanceWindow window = new GpsDistanceWindow();
+@Test
+public void testExactFiveMinuteBoundary() {
+    GpsDistanceWindow window = new GpsDistanceWindow();
 
-        GpsEvent first = new GpsEvent("Tracker0", 40.0, 116.0, 100.0);
-        GpsEvent second = new GpsEvent("Tracker0", 40.001, 116.0, 100.0);
+    GpsEvent first = new GpsEvent("Tracker0", 40.0, 116.0, 100.0);
+    GpsEvent second = new GpsEvent("Tracker0", 40.001, 116.0, 100.0);
 
-        window.addEvent(first, 0);
-        window.addEvent(second, 60000);
+    window.addEvent(first, 0);
+    window.addEvent(second, 60000);
 
-        double expected = GpsDistance.calculateDistance(first, second);
+    double expected = GpsDistance.calculateDistance(first, second);
 
-        // Exactly five minutes after the second event
-        assertEquals(expected, window.getDistance(360000), 0.0001);
+    // Both positions are initially inside the window
+    assertEquals(expected, window.getDistance(300000), 0.0001);
 
-        // One millisecond later, the movement expires
-        assertEquals(0.0, window.getDistance(360001), 0.0001);
-    }
+    // At 300001 ms, the first position has expired
+    assertEquals(0.0, window.getDistance(300001), 0.0001);
+
+    // Only the second position remains at 360000 ms
+    assertEquals(0.0, window.getDistance(360000), 0.0001);
+}
+
 
     @Test
     public void testLongGapBetweenEvents() {
