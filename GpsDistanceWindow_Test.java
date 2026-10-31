@@ -122,4 +122,44 @@ public void testExactFiveMinuteBoundary() {
         assertEquals(0.0, window.getDistance(480000), 0.0001);
     }
 
+    @Test
+public void testDistanceRecalculationAfterRestrictionChange() {
+    GpsDistanceWindow window = new GpsDistanceWindow();
+
+    GpsEvent first = new GpsEvent("Tracker0", 39.0, 115.0, 100.0);
+    GpsEvent second = new GpsEvent("Tracker0", 39.001, 115.0, 100.0);
+    GpsEvent third = new GpsEvent("Tracker0", 41.0, 117.0, 100.0);
+    GpsEvent fourth = new GpsEvent("Tracker0", 39.002, 115.0, 100.0);
+
+    window.addEvent(first, 0);
+    window.addEvent(second, 60000);
+    window.addEvent(third, 120000);
+    window.addEvent(fourth, 180000);
+
+    // Initially allow all GPS coordinates
+    GpsRestrictions unrestricted = new GpsRestrictions(90.0, 180.0);
+
+    double fullDistance = window.getDistance(180000, unrestricted);
+
+    // Restrict coordinates to exclude the third position
+    GpsRestrictions restricted = new GpsRestrictions(40.0, 116.0);
+
+    double expected =
+        GpsDistance.calculateDistance(first, second)
+        + GpsDistance.calculateDistance(second, fourth);
+
+    double filteredDistance = window.getDistance(180000, restricted);
+
+    assertEquals(expected, filteredDistance, 0.0001);
+
+    // Excluding a position changes the calculated route
+    assertNotEquals(fullDistance, filteredDistance, 0.0001);
+
+    // Restore unrestricted coordinates without losing GPS history
+    assertEquals(
+        fullDistance,
+        window.getDistance(180000, unrestricted),
+        0.0001
+    );
+}
 }

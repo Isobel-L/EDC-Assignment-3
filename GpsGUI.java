@@ -6,13 +6,15 @@ import javax.swing.Timer;
 import javax.swing.JTextField;
 import javax.swing.JButton;
 import javax.swing.JOptionPane;
+
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.util.ArrayList;
+import java.util.List;
+
 import nz.sodium.Stream;
 import nz.sodium.CellSink;
 import nz.sodium.Listener;
-import java.util.ArrayList;
-import java.util.List;
 
 public class GpsGUI extends JFrame {
 
@@ -20,12 +22,10 @@ public class GpsGUI extends JFrame {
     private final List<Listener> listeners = new ArrayList<>();
 
     // Store one distance window for each tracker
-    private final GpsDistanceWindow[] distanceWindows =
-        new GpsDistanceWindow[10];
+    private final GpsDistanceWindow[] distanceWindows = new GpsDistanceWindow[10];
 
     // Store the distance display labels
     private final JLabel[] distanceLabels = new JLabel[10];
-
 
     // Validate a coordinate restriction before updating Sodium
     private static double parseRestriction(
@@ -33,8 +33,7 @@ public class GpsGUI extends JFrame {
 
         if (input == null || input.trim().isEmpty()) {
             throw new IllegalArgumentException(
-                coordinate + " restriction cannot be empty."
-            );
+                    coordinate + " restriction cannot be empty.");
         }
 
         double value;
@@ -43,21 +42,18 @@ public class GpsGUI extends JFrame {
             value = Double.parseDouble(input.trim());
         } catch (NumberFormatException ex) {
             throw new IllegalArgumentException(
-                coordinate + " restriction must be a valid number."
-            );
+                    coordinate + " restriction must be a valid number.");
         }
 
         if (!Double.isFinite(value)) {
             throw new IllegalArgumentException(
-                coordinate + " restriction must be a finite number."
-            );
+                    coordinate + " restriction must be a finite number.");
         }
 
         if (value < 0 || value > maximum) {
             throw new IllegalArgumentException(
-                coordinate + " restriction must be between 0 and "
-                + maximum + "."
-            );
+                    coordinate + " restriction must be between 0 and "
+                            + maximum + ".");
         }
 
         return value == 0 ? 0.0 : value;
@@ -73,33 +69,29 @@ public class GpsGUI extends JFrame {
 
         // Main heading
         JLabel heading = new JLabel(
-            "GPS Tracking System",
-            JLabel.CENTER
-        );
+                "GPS Tracking System",
+                JLabel.CENTER);
 
         add(heading, BorderLayout.NORTH);
 
         // Create a panel to hold all 10 GPS trackers
         JPanel trackerPanel = new JPanel(
-            new GridLayout(5, 2, 10, 10)
-        );
+                new GridLayout(5, 2, 10, 10));
 
         // Create a separate display for each tracker
         for (int i = 0; i < 10; i++) {
 
             JPanel individualTracker = new JPanel(
-                new GridLayout(5, 1)
-            );
+                    new GridLayout(5, 1));
 
             JLabel nameLabel = new JLabel("Tracker" + i);
             JLabel latitudeLabel = new JLabel("Latitude: --");
             JLabel longitudeLabel = new JLabel("Longitude: --");
             JLabel eventLabel = new JLabel("Latest Event: --");
 
-            // New distance display
+            // Distance display
             JLabel distanceLabel = new JLabel(
-                "Distance (last 5 min): 0 m"
-            );
+                    "Distance (last 5 min): 0 m");
 
             individualTracker.add(nameLabel);
             individualTracker.add(latitudeLabel);
@@ -108,12 +100,11 @@ public class GpsGUI extends JFrame {
             individualTracker.add(distanceLabel);
 
             individualTracker.setBorder(
-                javax.swing.BorderFactory.createEtchedBorder()
-            );
+                    javax.swing.BorderFactory.createEtchedBorder());
 
             trackerPanel.add(individualTracker);
 
-            // Initialise this tracker's distance window
+            // Initialise the distance window
             distanceWindows[i] = new GpsDistanceWindow();
             distanceLabels[i] = distanceLabel;
         }
@@ -125,39 +116,32 @@ public class GpsGUI extends JFrame {
         Stream<GpsEvent>[] streams = service.getEventStreams();
 
         // Store current restrictions in a Sodium reactive cell
-        CellSink<GpsRestrictions> activeRestrictions =
-            new CellSink<>(new GpsRestrictions(90.0, 180.0));
+        JTextField latitudeInput = new JTextField("90.0");
+        JTextField longitudeInput = new JTextField("180.0");
 
         // Connect each GPS stream to its tracker panel
         for (int i = 0; i < 10; i++) {
 
             final int trackerIndex = i;
 
-            // Remove altitude from the displayed event using Sodium
-            Stream<String> simplifiedStream = streams[i].map(event ->
-                event.name + "," + event.latitude + "," + event.longitude
-            );
+            // Remove altitude from displayed events using Sodium map()
+            Stream<String> simplifiedStream = streams[i]
+                    .map(event -> event.name + "," + event.latitude + "," + event.longitude);
 
-            JPanel individualTracker =
-                (JPanel) trackerPanel.getComponent(i);
+            JPanel individualTracker = (JPanel) trackerPanel.getComponent(i);
 
-            JLabel latitudeLabel =
-                (JLabel) individualTracker.getComponent(1);
+            JLabel latitudeLabel = (JLabel) individualTracker.getComponent(1);
 
-            JLabel longitudeLabel =
-                (JLabel) individualTracker.getComponent(2);
+            JLabel longitudeLabel = (JLabel) individualTracker.getComponent(2);
 
-            JLabel eventLabel =
-                (JLabel) individualTracker.getComponent(3);
+            JLabel eventLabel = (JLabel) individualTracker.getComponent(3);
 
-            // Clear the latest event after 3 seconds
-            Timer clearTimer = new Timer(3000, e ->
-                eventLabel.setText("Latest Event: --")
-            );
+            // Clear the latest event after three seconds
+            Timer clearTimer = new Timer(3000, e -> eventLabel.setText("Latest Event: --"));
 
             clearTimer.setRepeats(false);
 
-            // Display incoming simplified GPS events
+            // Display simplified GPS events
             listeners.add(simplifiedStream.listen(data -> {
 
                 SwingUtilities.invokeLater(() -> {
@@ -165,53 +149,38 @@ public class GpsGUI extends JFrame {
                     String[] fields = data.split(",");
 
                     latitudeLabel.setText(
-                        "Latitude: " + fields[1]
-                    );
+                            "Latitude: " + fields[1]);
 
                     longitudeLabel.setText(
-                        "Longitude: " + fields[2]
-                    );
+                            "Longitude: " + fields[2]);
 
                     eventLabel.setText(
-                        "Latest Event: " + data
-                    );
+                            "Latest Event: " + data);
 
                     clearTimer.restart();
                 });
             }));
 
-            // Check GPS events against the current restrictions
-            Stream<GpsEvent> checkedTrackerStream =
-                streams[i].snapshot(
-                    activeRestrictions,
-                    (event, restrictions) ->
-                        restrictions.contains(event) ? event : null
-                );
-
-            // Remove events outside the selected coordinate range
-            Stream<GpsEvent> filteredTrackerStream =
-                checkedTrackerStream.filter(event -> event != null);
-
-            // Update the distance window using accepted GPS events
-            listeners.add(filteredTrackerStream.listen(event -> {
+            // Store all GPS positions for distance calculations
+            // Restrictions are applied when calculating the total
+            listeners.add(streams[i].listen(event -> {
 
                 SwingUtilities.invokeLater(() -> {
 
                     long currentTime = System.currentTimeMillis();
 
+                    // Retain the GPS event in this tracker's history
                     distanceWindows[trackerIndex].addEvent(
-                        event,
-                        currentTime
-                    );
+                            event,
+                            currentTime);
 
-                    long distance =
-                        distanceWindows[trackerIndex]
+                    // Calculate distance using current restrictions
+                    long distance = distanceWindows[trackerIndex]
                             .getRoundedDistance(currentTime);
 
                     distanceLabels[trackerIndex].setText(
-                        "Distance (last 5 min): "
-                        + distance + " m"
-                    );
+                            "Distance (last 5 min): "
+                                    + distance + " m");
                 });
             }));
         }
@@ -225,106 +194,84 @@ public class GpsGUI extends JFrame {
 
         // Create latitude and longitude restriction controls
         JPanel restrictionPanel = new JPanel(
-            new GridLayout(2, 3, 10, 5)
-        );
+                new GridLayout(2, 3, 10, 5));
 
         JTextField latitudeInput = new JTextField("40.0");
         JTextField longitudeInput = new JTextField("116.0");
 
-        JButton setRestrictionButton =
-            new JButton("Set Restriction");
+        JButton setRestrictionButton = new JButton("Set Restriction");
 
         JLabel latitudeRestrictionLabel = new JLabel(
-            "Latitude restriction: +/- 90.0"
-        );
+                "Latitude restriction: +/- 90.0");
 
         JLabel longitudeRestrictionLabel = new JLabel(
-            "Longitude restriction: +/- 180.0"
-        );
+                "Longitude restriction: +/- 180.0");
 
         restrictionPanel.add(
-            new JLabel("Latitude (+/- degrees):")
-        );
+                new JLabel("Latitude (+/- degrees):"));
 
         restrictionPanel.add(latitudeInput);
         restrictionPanel.add(latitudeRestrictionLabel);
 
         restrictionPanel.add(
-            new JLabel("Longitude (+/- degrees):")
-        );
+                new JLabel("Longitude (+/- degrees):"));
 
         restrictionPanel.add(longitudeInput);
         restrictionPanel.add(longitudeRestrictionLabel);
 
         JPanel restrictionControls = new JPanel(
-            new BorderLayout()
-        );
+                new BorderLayout());
 
         restrictionControls.add(
-            restrictionPanel,
-            BorderLayout.CENTER
-        );
+                restrictionPanel,
+                BorderLayout.CENTER);
 
         restrictionControls.add(
-            setRestrictionButton,
-            BorderLayout.SOUTH
-        );
+                setRestrictionButton,
+                BorderLayout.SOUTH);
 
         restrictionControls.setBorder(
-            javax.swing.BorderFactory.createTitledBorder(
-                "GPS Coordinate Restrictions"
-            )
-        );
+                javax.swing.BorderFactory.createTitledBorder(
+                        "GPS Coordinate Restrictions"));
 
         // Create a display for combined GPS events
         JPanel combinedPanel = new JPanel(
-            new BorderLayout()
-        );
+                new BorderLayout());
 
         JLabel combinedHeading = new JLabel(
-            "Combined GPS Events",
-            JLabel.CENTER
-        );
+                "Combined GPS Events",
+                JLabel.CENTER);
 
         JLabel combinedEventLabel = new JLabel(
-            "Latest Event: --",
-            JLabel.CENTER
-        );
+                "Latest Event: --",
+                JLabel.CENTER);
 
         combinedPanel.add(
-            combinedHeading,
-            BorderLayout.NORTH
-        );
+                combinedHeading,
+                BorderLayout.NORTH);
 
         combinedPanel.add(
-            combinedEventLabel,
-            BorderLayout.CENTER
-        );
+                combinedEventLabel,
+                BorderLayout.CENTER);
 
         combinedPanel.setBorder(
-            javax.swing.BorderFactory.createEtchedBorder()
-        );
+                javax.swing.BorderFactory.createEtchedBorder());
 
         JPanel bottomPanel = new JPanel(
-            new BorderLayout()
-        );
+                new BorderLayout());
 
         bottomPanel.add(
-            restrictionControls,
-            BorderLayout.NORTH
-        );
+                restrictionControls,
+                BorderLayout.NORTH);
 
         bottomPanel.add(
-            combinedPanel,
-            BorderLayout.CENTER
-        );
+                combinedPanel,
+                BorderLayout.CENTER);
 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        // Clear the combined event after 3 seconds
-        Timer combinedTimer = new Timer(3000, e ->
-            combinedEventLabel.setText("Latest Event: --")
-        );
+        // Clear the combined event after three seconds
+        Timer combinedTimer = new Timer(3000, e -> combinedEventLabel.setText("Latest Event: --"));
 
         combinedTimer.setRepeats(false);
 
@@ -334,101 +281,99 @@ public class GpsGUI extends JFrame {
             try {
 
                 double latitude = parseRestriction(
-                    latitudeInput.getText(),
-                    "Latitude",
-                    90.0
-                );
+                        latitudeInput.getText(),
+                        "Latitude",
+                        90.0);
 
                 double longitude = parseRestriction(
-                    longitudeInput.getText(),
-                    "Longitude",
-                    180.0
-                );
+                        longitudeInput.getText(),
+                        "Longitude",
+                        180.0);
 
-                // Send validated restrictions into Sodium
-                activeRestrictions.send(
-                    new GpsRestrictions(latitude, longitude)
-                );
+                // Create the newly selected restrictions
+                GpsRestrictions newRestrictions = new GpsRestrictions(latitude, longitude);
+
+                // Update the Sodium reactive cell
+                activeRestrictions.send(newRestrictions);
 
                 latitudeRestrictionLabel.setText(
-                    "Latitude restriction: +/- " + latitude
-                );
+                        "Latitude restriction: +/- " + latitude);
 
                 longitudeRestrictionLabel.setText(
-                    "Longitude restriction: +/- " + longitude
-                );
+                        "Longitude restriction: +/- " + longitude);
 
-                // Reset distance tracking when restrictions change
+                // Recalculate distances without clearing GPS history
+                long currentTime = System.currentTimeMillis();
+
                 for (int i = 0; i < 10; i++) {
 
-                    distanceWindows[i].reset();
+                    // Apply the new restrictions to stored positions
+                    distanceWindows[i].setRestrictions(
+                            newRestrictions);
+
+                    // Recalculate the distance immediately
+                    long distance = distanceWindows[i]
+                            .getRoundedDistance(currentTime);
 
                     distanceLabels[i].setText(
-                        "Distance (last 5 min): 0 m"
-                    );
+                            "Distance (last 5 min): "
+                                    + distance + " m");
                 }
 
-                // Clear the previous combined event
+                // Clear the previous combined display
                 combinedTimer.stop();
 
                 combinedEventLabel.setText(
-                    "Latest Event: --"
-                );
+                        "Latest Event: --");
 
             } catch (IllegalArgumentException ex) {
 
                 JOptionPane.showMessageDialog(
-                    this,
-                    ex.getMessage(),
-                    "Invalid Restriction",
-                    JOptionPane.ERROR_MESSAGE
-                );
+                        this,
+                        ex.getMessage(),
+                        "Invalid Restriction",
+                        JOptionPane.ERROR_MESSAGE);
             }
         });
 
-        // Apply the current restrictions to the combined stream
+        // Apply restrictions to the combined GPS stream
         Stream<GpsEvent> checkedStream = combinedStream.snapshot(
-            activeRestrictions,
-            (event, restrictions) ->
-                restrictions.contains(event) ? event : null
-        );
+                activeRestrictions,
+                (event, restrictions) -> restrictions.contains(event) ? event : null);
 
+        // Exclude events outside the current restrictions
         Stream<GpsEvent> filteredStream = checkedStream.filter(
-            event -> event != null
-        );
+                event -> event != null);
 
-        // Display only events that pass the Sodium filter
+        // Display accepted events from the combined stream
         listeners.add(filteredStream.listen(event -> {
 
             SwingUtilities.invokeLater(() -> {
 
                 combinedEventLabel.setText(
-                    "Latest Event: " + event.name + ","
-                    + event.latitude + ","
-                    + event.longitude + ","
-                    + event.altitude
-                );
+                        "Latest Event: " + event.name + ","
+                                + event.latitude + ","
+                                + event.longitude + ","
+                                + event.altitude);
 
                 combinedTimer.restart();
             });
         }));
 
-        // Refresh distances every second so expired movements disappear
-        // even when a tracker stops sending new GPS events
+        // Refresh distance totals every second
+        // This allows expired movements to disappear
         Timer distanceRefreshTimer = new Timer(1000, e -> {
 
             long currentTime = System.currentTimeMillis();
 
             for (int i = 0; i < 10; i++) {
 
-                long distance =
-                    distanceWindows[i]
+                long distance = distanceWindows[i]
                         .getRoundedDistance(currentTime);
 
                 distanceLabels[i].setText(
-                    "Distance (last 5 min): "
-                    + distance + " m"
-                );
+                        "Distance (last 5 min): "
+                                + distance + " m");
             }
         });
 
