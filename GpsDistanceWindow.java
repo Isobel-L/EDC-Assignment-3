@@ -21,12 +21,25 @@ public class GpsDistanceWindow {
     // Store GPS positions in chronological order
     private final Deque<TimedGpsEvent> events = new ArrayDeque<>();
 
-    // Remember the most recent event for boundary calculations
+    // Remember the most recent event
     private TimedGpsEvent previousEvent = null;
 
     // Store the current restrictions
     private GpsRestrictions currentRestrictions =
         new GpsRestrictions(90.0, 180.0);
+
+    // Record whether altitude is already in metres
+    private final boolean altitudeInMetres;
+
+    // Default constructor: original GPS altitude is in feet
+    public GpsDistanceWindow() {
+        this(false);
+    }
+
+    // Constructor for streams with altitude already converted
+    public GpsDistanceWindow(boolean altitudeInMetres) {
+        this.altitudeInMetres = altitudeInMetres;
+    }
 
     // Process a new GPS event
     public void addEvent(GpsEvent event, long timestamp) {
@@ -49,7 +62,7 @@ public class GpsDistanceWindow {
         previousEvent = timedEvent;
     }
 
-    // Remove GPS events older than the five-minute window
+    // Remove GPS events older than five minutes
     private void removeExpiredEvents(long currentTime) {
 
         long cutoff = currentTime - WINDOW_DURATION;
@@ -61,13 +74,13 @@ public class GpsDistanceWindow {
         }
     }
 
-    // Calculate the current total distance
+    // Calculate distance using current restrictions
     public double getDistance(long currentTime) {
 
         return getDistance(currentTime, currentRestrictions);
     }
 
-    // Calculate distance using the selected restrictions
+    // Calculate distance between accepted GPS positions
     public double getDistance(
             long currentTime, GpsRestrictions restrictions) {
 
@@ -77,27 +90,41 @@ public class GpsDistanceWindow {
 
         TimedGpsEvent previousAccepted = null;
 
-        // Process only GPS events within the selected restrictions
         for (TimedGpsEvent current : events) {
 
+            // Skip positions outside the active restrictions
             if (!restrictions.contains(current.event)) {
                 continue;
             }
 
-            // Calculate movement from the previous accepted position
             if (previousAccepted != null) {
 
                 long timeDifference =
                     current.timestamp - previousAccepted.timestamp;
 
-                // Only connect positions up to five minutes apart
                 if (timeDifference >= 0
                         && timeDifference <= WINDOW_DURATION) {
 
-                    totalDistance += GpsDistance.calculateDistance(
-                        previousAccepted.event,
-                        current.event
-                    );
+                    double distance;
+
+                    if (altitudeInMetres) {
+
+                        // Altitude was converted using Sodium map()
+                        distance = GpsDistance.calculateDistanceMetres(
+                            previousAccepted.event,
+                            current.event
+                        );
+
+                    } else {
+
+                        // Original GPS altitude remains in feet
+                        distance = GpsDistance.calculateDistance(
+                            previousAccepted.event,
+                            current.event
+                        );
+                    }
+
+                    totalDistance += distance;
                 }
             }
 
@@ -107,7 +134,7 @@ public class GpsDistanceWindow {
         return totalDistance;
     }
 
-    // Return the distance rounded up to the nearest metre
+    // Return distance rounded up to the nearest metre
     public long getRoundedDistance(long currentTime) {
 
         return (long) Math.ceil(getDistance(currentTime));
@@ -122,13 +149,13 @@ public class GpsDistanceWindow {
         );
     }
 
-    // Update the currently selected restrictions
+    // Update current restrictions
     public void setRestrictions(GpsRestrictions restrictions) {
 
         currentRestrictions = restrictions;
     }
 
-    // Reset the window
+    // Reset distance history
     public void reset() {
 
         events.clear();

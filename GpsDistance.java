@@ -1,4 +1,3 @@
-
 public class GpsDistance {
 
     // Approximate radius of the Earth in metres
@@ -9,8 +8,32 @@ public class GpsDistance {
         return feet * 0.3048;
     }
 
-    // Calculate the distance between two GPS positions
+    // Calculate distance using original GPS data
+    // Altitude is supplied in feet
     public static double calculateDistance(
+            GpsEvent start, GpsEvent end) {
+
+        // Convert altitude into metres
+        GpsEvent startMetres = new GpsEvent(
+            start.name,
+            start.latitude,
+            start.longitude,
+            feetToMetres(start.altitude)
+        );
+
+        GpsEvent endMetres = new GpsEvent(
+            end.name,
+            end.latitude,
+            end.longitude,
+            feetToMetres(end.altitude)
+        );
+
+        return calculateDistanceMetres(startMetres, endMetres);
+    }
+
+    // Calculate distance when altitude is already in metres
+    // This method will be used by the Sodium FRP pipeline
+    public static double calculateDistanceMetres(
             GpsEvent start, GpsEvent end) {
 
         // Convert latitude and longitude differences to radians
@@ -42,12 +65,11 @@ public class GpsDistance {
             eastWestDistance
         );
 
-        // Convert altitude difference from feet to metres
-        double altitudeDifference = feetToMetres(
-            end.altitude - start.altitude
-        );
+        // Altitude is already in metres
+        double altitudeDifference =
+            end.altitude - start.altitude;
 
-        // Calculate total 3D distance including altitude
+        // Calculate 3D distance including altitude
         return Math.hypot(
             horizontalDistance,
             altitudeDifference
