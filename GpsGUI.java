@@ -21,13 +21,10 @@ import nz.sodium.Listener;
 
 public class GpsGUI extends JFrame {
 
-    // Keep Sodium listeners active while the GUI is running
     private final List<Listener> listeners = new ArrayList<>();
 
-    // Display the calculated distance for each tracker
     private final JLabel[] distanceLabels = new JLabel[10];
 
-    // Validate coordinate restrictions
     private static double parseRestriction(
             String input,
             String coordinate,
@@ -67,7 +64,6 @@ public class GpsGUI extends JFrame {
 
     public GpsGUI() {
 
-        // Main application window
         setTitle("GPS Tracking System");
         setSize(1000, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -80,7 +76,6 @@ public class GpsGUI extends JFrame {
 
         add(heading, BorderLayout.NORTH);
 
-        // Create the ten tracker displays
         JPanel trackerPanel = new JPanel(
             new GridLayout(5, 2, 10, 10)
         );
@@ -117,22 +112,17 @@ public class GpsGUI extends JFrame {
 
         add(trackerPanel, BorderLayout.CENTER);
 
-        // Obtain the GPS event streams
         GpsService service = new GpsService();
-
         Stream<GpsEvent>[] streams = service.getEventStreams();
 
-        // Reactive coordinate restrictions
         CellSink<GpsRestrictions> activeRestrictions =
             new CellSink<>(
                 new GpsRestrictions(90.0, 180.0)
             );
 
-        // Reactive refresh requests
-        // These allow distances to expire without new GPS events
         StreamSink<Long> refreshRequests = new StreamSink<>();
 
-        // Create the reactive processing pipeline for each tracker
+        // Process each of the ten GPS tracker streams
         for (int i = 0; i < 10; i++) {
 
             final int trackerIndex = i;
@@ -149,24 +139,17 @@ public class GpsGUI extends JFrame {
             JLabel eventLabel =
                 (JLabel) individualTracker.getComponent(3);
 
-            // ----------------------------------------------------
-            // Individual simplified GPS display
-            // ----------------------------------------------------
+            // Use the separately tested event display class
+            GpsEventDisplay eventDisplay =
+                new GpsEventDisplay(eventLabel);
 
-            // Remove altitude using Sodium map()
+            // Remove altitude from simplified events using Sodium
             Stream<String> simplifiedStream = streams[i].map(
                 event ->
                     event.name + ","
                     + event.latitude + ","
                     + event.longitude
             );
-
-            Timer clearTimer = new Timer(
-                3000,
-                e -> eventLabel.setText("Latest Event: --")
-            );
-
-            clearTimer.setRepeats(false);
 
             listeners.add(simplifiedStream.listen(data -> {
 
@@ -182,20 +165,12 @@ public class GpsGUI extends JFrame {
                         "Longitude: " + fields[2]
                     );
 
-                    eventLabel.setText(
-                        "Latest Event: " + data
-                    );
-
-                    clearTimer.restart();
+                    // The display class handles the timer
+                    eventDisplay.showEvent(data);
                 });
             }));
 
-            // ----------------------------------------------------
-            // FRP distance processing
-            // ----------------------------------------------------
-
-            // Step 1: Convert altitude from feet to metres
-            // using Sodium map()
+            // Convert altitude from feet to metres using Sodium map()
             Stream<GpsEvent> convertedStream = streams[i].map(
                 event ->
                     new GpsEvent(
@@ -206,8 +181,7 @@ public class GpsGUI extends JFrame {
                     )
             );
 
-            // Step 2: Attach the arrival time to each GPS event
-            // using Sodium map()
+            // Attach event timestamps using Sodium map()
             Stream<GpsHistory.TimedEvent> timestampedStream =
                 convertedStream.map(
                     event ->
@@ -217,8 +191,7 @@ public class GpsGUI extends JFrame {
                         )
                 );
 
-            // Step 3: Maintain immutable GPS history
-            // using Sodium accum()
+            // Maintain immutable GPS history using Sodium accum()
             Cell<GpsHistory> historyCell =
                 timestampedStream.accum(
                     new GpsHistory(),
@@ -226,11 +199,7 @@ public class GpsGUI extends JFrame {
                         previousHistory.add(event)
                 );
 
-            // Step 4: Combine the GPS history and current
-            // restrictions using Sodium lift()
-            //
-            // This recalculates distance whenever either
-            // the GPS history or restrictions change.
+            // Recalculate distance when history or restrictions change
             Cell<Long> distanceCell = historyCell.lift(
                 activeRestrictions,
                 (history, restrictions) ->
@@ -240,7 +209,6 @@ public class GpsGUI extends JFrame {
                     )
             );
 
-            // Step 5: Display reactive distance updates
             listeners.add(distanceCell.listen(distance -> {
 
                 SwingUtilities.invokeLater(() -> {
@@ -252,11 +220,7 @@ public class GpsGUI extends JFrame {
                 });
             }));
 
-            // Step 6: Recalculate distance every second
-            // using Sodium snapshot()
-            //
-            // This ensures old GPS positions stop
-            // contributing to the five-minute distance.
+            // Refresh distance when older positions expire
             Stream<Long> distanceFromRefresh =
                 refreshRequests.snapshot(
                     historyCell,
@@ -268,7 +232,6 @@ public class GpsGUI extends JFrame {
                         )
                 );
 
-            // Step 7: Display periodically refreshed distances
             listeners.add(distanceFromRefresh.listen(distance -> {
 
                 SwingUtilities.invokeLater(() -> {
@@ -281,20 +244,14 @@ public class GpsGUI extends JFrame {
             }));
         }
 
-        // --------------------------------------------------------
-        // Combined GPS event stream
-        // --------------------------------------------------------
-
+        // Combine the ten tracker event streams
         Stream<GpsEvent> combinedStream = streams[0];
 
         for (int i = 1; i < streams.length; i++) {
             combinedStream = combinedStream.orElse(streams[i]);
         }
 
-        // --------------------------------------------------------
-        // Coordinate restriction controls
-        // --------------------------------------------------------
-
+        // Create restriction controls
         JPanel restrictionPanel = new JPanel(
             new GridLayout(2, 3, 10, 5)
         );
@@ -347,10 +304,7 @@ public class GpsGUI extends JFrame {
             )
         );
 
-        // --------------------------------------------------------
-        // Combined event display
-        // --------------------------------------------------------
-
+        // Combined GPS event display
         JPanel combinedPanel = new JPanel(
             new BorderLayout()
         );
@@ -395,17 +349,12 @@ public class GpsGUI extends JFrame {
 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        Timer combinedTimer = new Timer(
-            3000,
-            e -> combinedEventLabel.setText("Latest Event: --")
-        );
+        // Use the same tested timer implementation
+        // for the combined event display
+        GpsEventDisplay combinedEventDisplay =
+            new GpsEventDisplay(combinedEventLabel);
 
-        combinedTimer.setRepeats(false);
-
-        // --------------------------------------------------------
         // Apply coordinate restrictions
-        // --------------------------------------------------------
-
         setRestrictionButton.addActionListener(e -> {
 
             try {
@@ -428,7 +377,6 @@ public class GpsGUI extends JFrame {
                         longitude
                     );
 
-                // Update reactive restrictions
                 activeRestrictions.send(newRestrictions);
 
                 latitudeRestrictionLabel.setText(
@@ -439,17 +387,13 @@ public class GpsGUI extends JFrame {
                     "Longitude restriction: +/- " + longitude
                 );
 
-                // Trigger a refresh using current restrictions
                 refreshRequests.send(
                     System.currentTimeMillis()
                 );
 
-                // Clear events displayed under old restrictions
-                combinedTimer.stop();
-
-                combinedEventLabel.setText(
-                    "Latest Event: --"
-                );
+                // Clear the combined display whenever
+                // the coordinate restrictions change
+                combinedEventDisplay.clear();
 
             } catch (IllegalArgumentException ex) {
 
@@ -462,10 +406,7 @@ public class GpsGUI extends JFrame {
             }
         });
 
-        // --------------------------------------------------------
-        // Filter combined GPS events using Sodium
-        // --------------------------------------------------------
-
+        // Filter combined events using current restrictions
         Stream<GpsEvent> checkedStream =
             combinedStream.snapshot(
                 activeRestrictions,
@@ -484,27 +425,17 @@ public class GpsGUI extends JFrame {
 
             SwingUtilities.invokeLater(() -> {
 
-                combinedEventLabel.setText(
-                    "Latest Event: "
-                    + event.name + ","
+                String eventText =
+                    event.name + ","
                     + event.latitude + ","
                     + event.longitude + ","
-                    + event.altitude
-                );
+                    + event.altitude;
 
-                combinedTimer.restart();
+                combinedEventDisplay.showEvent(eventText);
             });
         }));
 
-        // --------------------------------------------------------
-        // Periodic FRP distance refresh
-        // --------------------------------------------------------
-
-        // Send the current time through Sodium every second.
-        //
-        // This triggers snapshot() for all ten trackers,
-        // allowing expired positions to stop contributing
-        // to the five-minute distance.
+        // Recalculate five-minute distances every second
         Timer distanceRefreshTimer = new Timer(
             1000,
             e -> refreshRequests.send(
